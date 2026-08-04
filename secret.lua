@@ -3,6 +3,48 @@
     if not game:IsLoaded() then
         game.Loaded:Wait()
     end
+    local function encodeValue(v)
+        local t = typeof(v)
+        if t == "Color3" then
+            return { _type = "Color3", R = v.R, G = v.G, B = v.B }
+        elseif t == "Vector3" then
+            return { _type = "Vector3", X = v.X, Y = v.Y, Z = v.Z }
+        elseif t == "EnumItem" then
+            return { _type = "EnumItem", EnumType = tostring(v.EnumType), Value = v.Value }
+        elseif t == "table" then
+            local res = {}
+            for k, val in v do
+                res[k] = encodeValue(val)
+            end
+            return res
+        end
+        return v
+    end
+    local function decodeValue(v)
+        if type(v) == "table" then
+            if v._type == "Color3" then
+                return Color3.new(v.R, v.G, v.B)
+            elseif v._type == "Vector3" then
+                return Vector3.new(v.X, v.Y, v.Z)
+            elseif v._type == "EnumItem" then
+                local enumSplit = string.split(v.EnumType, ".")
+                local enumTypeStr = enumSplit[#enumSplit]
+                if Enum[enumTypeStr] then
+                    for _, enumItem in (Enum[enumTypeStr]:GetEnumItems()) do
+                        if enumItem.Value == v.Value then return enumItem end
+                    end
+                end
+                return nil
+            else
+                local res = {}
+                for k, val in v do
+                    res[k] = decodeValue(val)
+                end
+                return res
+            end
+        end
+        return v
+    end
     local _spoofed_registry = {}
     local _original_tostring = tostring
     local _original_type = type
@@ -66,10 +108,12 @@
     local TweenService = game:GetService("TweenService")
     local CoreGui = game:GetService("CoreGui")
     local Library = {}
+    local Utility = {}
+    Library.Utility = Utility
     Library.Flags = {}
     Library.KeybindRegistry = {}
-    local Utility = {}
-    local AccentUpdates = {}
+    Library.AccentUpdates = {}
+    local AccentUpdates = Library.AccentUpdates
     local GuiTheme = 1 
     local Theme = {
         MainBg = GuiTheme == 1 and Color3.fromRGB(0, 0, 0) or Color3.fromRGB(11, 11, 11),
@@ -100,7 +144,8 @@
         AK = "rbxthumb://type=Asset&id=121279676616739&w=420&h=420",
         SMG = "rbxthumb://type=Asset&id=16057575272&w=420&h=420"
     }
-    function Utility:GetWeaponIcon(weaponName)
+    function Utility.GetWeaponIcon(self_or_name, name)
+        local weaponName = name or self_or_name
         weaponName = string.lower(tostring(weaponName or ""))
         if string.find(weaponName, "ak") or string.find(weaponName, "kalash") then return WeaponDecals.AK
         elseif string.find(weaponName, "m4") or string.find(weaponName, "ar") or string.find(weaponName, "rifle") or string.find(weaponName, "aug") or string.find(weaponName, "famas") then return WeaponDecals.M4
@@ -370,7 +415,48 @@
             end
         end)
         local success = pcall(function() ScreenGui.Parent = CoreGui end)
-        if not success then ScreenGui.Parent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui") end
+        local function encodeValue(v)
+            local t = typeof(v)
+            if t == "Color3" then
+                return { _type = "Color3", R = v.R, G = v.G, B = v.B }
+            elseif t == "Vector3" then
+                return { _type = "Vector3", X = v.X, Y = v.Y, Z = v.Z }
+            elseif t == "EnumItem" then
+                return { _type = "EnumItem", EnumType = tostring(v.EnumType), Value = v.Value }
+            elseif t == "table" then
+                local res = {}
+                for k, val in v do
+                    res[k] = encodeValue(val)
+                end
+                return res
+            end
+            return v
+        end
+        local function decodeValue(v)
+            if type(v) == "table" then
+                if v._type == "Color3" then
+                    return Color3.new(v.R, v.G, v.B)
+                elseif v._type == "Vector3" then
+                    return Vector3.new(v.X, v.Y, v.Z)
+                elseif v._type == "EnumItem" then
+                    local enumSplit = string.split(v.EnumType, ".")
+                    local enumTypeStr = enumSplit[#enumSplit]
+                    if Enum[enumTypeStr] then
+                        for _, enumItem in (Enum[enumTypeStr]:GetEnumItems()) do
+                            if enumItem.Value == v.Value then return enumItem end
+                        end
+                    end
+                    return nil
+                else
+                    local res = {}
+                    for k, val in v do
+                        res[k] = decodeValue(val)
+                    end
+                    return res
+                end
+            end
+            return v
+        end
         function Library:IsGuiOpen()
             return ScreenGui.Enabled
         end
@@ -616,48 +702,6 @@
                 end)
                 table.insert(CPPopupConnections, c1); table.insert(CPPopupConnections, c2)
             end, sourceElement)
-        end
-        local function encodeValue(v)
-            local t = typeof(v)
-            if t == "Color3" then
-                return { _type = "Color3", R = v.R, G = v.G, B = v.B }
-            elseif t == "Vector3" then
-                return { _type = "Vector3", X = v.X, Y = v.Y, Z = v.Z }
-            elseif t == "EnumItem" then
-                return { _type = "EnumItem", EnumType = tostring(v.EnumType), Value = v.Value }
-            elseif t == "table" then
-                local res = {}
-                for k, val in v do
-                    res[k] = encodeValue(val)
-                end
-                return res
-            end
-            return v
-        end
-        local function decodeValue(v)
-            if type(v) == "table" then
-                if v._type == "Color3" then
-                    return Color3.new(v.R, v.G, v.B)
-                elseif v._type == "Vector3" then
-                    return Vector3.new(v.X, v.Y, v.Z)
-                elseif v._type == "EnumItem" then
-                    local enumSplit = string.split(v.EnumType, ".")
-                    local enumTypeStr = enumSplit[#enumSplit]
-                    if Enum[enumTypeStr] then
-                        for _, enumItem in (Enum[enumTypeStr]:GetEnumItems()) do
-                            if enumItem.Value == v.Value then return enumItem end
-                        end
-                    end
-                    return nil
-                else
-                    local res = {}
-                    for k, val in v do
-                        res[k] = decodeValue(val)
-                    end
-                    return res
-                end
-            end
-            return v
         end
         local MainOutlineFrame = Utility:Create("Frame", {
             Name = "MainOutlineFrame",
@@ -1131,6 +1175,11 @@
                                 end
                             end
                             BindModeList.Visible = false
+                        end)
+                        table.insert(AccentUpdates, function(col)
+                            if btn and btn.Parent then
+                                if bindMode == modeName then btn.TextColor3 = col end
+                            end
                         end)
                     end
                     makeModeBtn("Toggle")
