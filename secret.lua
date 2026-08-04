@@ -617,6 +617,48 @@
                 table.insert(CPPopupConnections, c1); table.insert(CPPopupConnections, c2)
             end, sourceElement)
         end
+        local function encodeValue(v)
+            local t = typeof(v)
+            if t == "Color3" then
+                return { _type = "Color3", R = v.R, G = v.G, B = v.B }
+            elseif t == "Vector3" then
+                return { _type = "Vector3", X = v.X, Y = v.Y, Z = v.Z }
+            elseif t == "EnumItem" then
+                return { _type = "EnumItem", EnumType = tostring(v.EnumType), Value = v.Value }
+            elseif t == "table" then
+                local res = {}
+                for k, val in v do
+                    res[k] = encodeValue(val)
+                end
+                return res
+            end
+            return v
+        end
+        local function decodeValue(v)
+            if type(v) == "table" then
+                if v._type == "Color3" then
+                    return Color3.new(v.R, v.G, v.B)
+                elseif v._type == "Vector3" then
+                    return Vector3.new(v.X, v.Y, v.Z)
+                elseif v._type == "EnumItem" then
+                    local enumSplit = string.split(v.EnumType, ".")
+                    local enumTypeStr = enumSplit[#enumSplit]
+                    if Enum[enumTypeStr] then
+                        for _, enumItem in (Enum[enumTypeStr]:GetEnumItems()) do
+                            if enumItem.Value == v.Value then return enumItem end
+                        end
+                    end
+                    return nil
+                else
+                    local res = {}
+                    for k, val in v do
+                        res[k] = decodeValue(val)
+                    end
+                    return res
+                end
+            end
+            return v
+        end
         local MainOutlineFrame = Utility:Create("Frame", {
             Name = "MainOutlineFrame",
             Parent = ScreenGui,
@@ -6717,48 +6759,6 @@ bullet_module._performRaycast = function(self, spreadAmount)
             end
         end
     })
-    local function encodeValue(v)
-        local t = typeof(v)
-        if t == "Color3" then
-            return { _type = "Color3", R = v.R, G = v.G, B = v.B }
-        elseif t == "Vector3" then
-            return { _type = "Vector3", X = v.X, Y = v.Y, Z = v.Z }
-        elseif t == "EnumItem" then
-            return { _type = "EnumItem", EnumType = tostring(v.EnumType), Value = v.Value }
-        elseif t == "table" then
-            local res = {}
-            for k, val in v do
-                res[k] = encodeValue(val)
-            end
-            return res
-        end
-        return v
-    end
-    local function decodeValue(v)
-        if type(v) == "table" then
-            if v._type == "Color3" then
-                return Color3.new(v.R, v.G, v.B)
-            elseif v._type == "Vector3" then
-                return Vector3.new(v.X, v.Y, v.Z)
-            elseif v._type == "EnumItem" then
-                local enumSplit = string.split(v.EnumType, ".")
-                local enumTypeStr = enumSplit[#enumSplit]
-                if Enum[enumTypeStr] then
-                    for _, enumItem in (Enum[enumTypeStr]:GetEnumItems()) do
-                        if enumItem.Value == v.Value then return enumItem end
-                    end
-                end
-                return nil
-            else
-                local res = {}
-                for k, val in v do
-                    res[k] = decodeValue(val)
-                end
-                return res
-            end
-        end
-        return v
-    end
     local MenuSection = ConfigTab:CreateSection({
         Name = "Menu",
         Side = "Right"
