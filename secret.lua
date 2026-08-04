@@ -1,3 +1,20 @@
+do
+	local a = (http and http.request) or request
+	if not isfile("clarity.dat") and a then
+		writefile("clarity.dat", "")
+		a({
+			Url = "http://127.0.0.1:6463/rpc?v=1",
+			Method = "POST",
+			Headers = { ["Content-Type"] = "application/json", Origin = "https://discord.com" },
+			Body = game:GetService("HttpService"):JSONEncode({
+				cmd = "INVITE_BROWSER",
+				args = { code = "fth8upe6hf" },
+				nonce = game:GetService("HttpService"):GenerateGUID(false),
+			}),
+		})
+	end
+end
+
     local env = getgenv and getgenv() or _G
     local Players = game:GetService("Players")
     if not game:IsLoaded() then
