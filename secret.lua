@@ -135,8 +135,8 @@ end
     local Theme = {
         MainBg = GuiTheme == 1 and Color3.fromRGB(0, 0, 0) or Color3.fromRGB(11, 11, 11),
         TabFrameBg = GuiTheme == 1 and Color3.fromRGB(0, 0, 0) or Color3.fromRGB(16, 16, 16),
-        SectionBg = GuiTheme == 1 and Color3.fromRGB(4, 4, 4) or Color3.fromRGB(14, 14, 14),
-        SectionOutline = GuiTheme == 1 and Color3.fromRGB(12, 12, 12) or Color3.fromRGB(24, 24, 24),
+        SectionBg = GuiTheme == 1 and Color3.fromRGB(8, 8, 8) or Color3.fromRGB(14, 14, 14),
+        SectionOutline = GuiTheme == 1 and Color3.fromRGB(28, 28, 28) or Color3.fromRGB(36, 36, 36),
         TabButton = GuiTheme == 1 and Color3.fromRGB(12, 12, 12) or Color3.fromRGB(30, 30, 30),
         TabButtonActive = GuiTheme == 1 and Color3.fromRGB(20, 20, 20) or Color3.fromRGB(44, 44, 44),
         TextMain = Color3.fromRGB(255, 255, 255),
@@ -1038,6 +1038,12 @@ end
                     Position = UDim2.new(0, 1, 0, 1)
                 })
                 Utility:Create("UICorner", { Parent = SectionFrame, CornerRadius = UDim.new(0, 6) })
+                Utility:Create("UIStroke", {
+                    Parent = SectionFrame,
+                    Color = Theme.SectionOutline,
+                    Thickness = 1,
+                    ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+                })
                 local SectionTitle = Utility:Create("TextLabel", {
                     Parent = SectionFrame,
                     BackgroundTransparency = 1,
@@ -1837,7 +1843,7 @@ end
     end
     local Window = Library:CreateWindow({
         Title = "LocalMaze Evade",
-        Size = UDim2.new(0, 790, 0, 520)
+        Size = UDim2.new(0, 680, 0, 480)
     })
     Window:CreateCategory("Combat")
     CombatTab = Window:CreateTab("Combat", "107058246184363")
@@ -3037,6 +3043,8 @@ end
         Default = 0,
         Callback = function(val) WorldSettings.Contrast = val / 100 end
     })
+    WorldSettings.StretchedResolutionEnabled = false
+    WorldSettings.StretchedResolutionFactor = 1.33
     CameraSection:CreateToggle({
         Name = "Enable Custom FOV",
         Default = false,
@@ -3048,6 +3056,18 @@ end
         Max = 120,
         Default = 70,
         Callback = function(val) WorldSettings.CustomFOV = val end
+    })
+    CameraSection:CreateToggle({
+        Name = "Stretched Resolution",
+        Default = false,
+        Callback = function(state) WorldSettings.StretchedResolutionEnabled = state end
+    })
+    CameraSection:CreateSlider({
+        Name = "Stretch Factor",
+        Min = 50,
+        Max = 200,
+        Default = 133,
+        Callback = function(val) WorldSettings.StretchedResolutionFactor = val / 100 end
     })
     CameraSection:CreateToggle({
         Name = "Third Person",
@@ -3371,6 +3391,11 @@ end
             if workspace.CurrentCamera.FieldOfView > 55 then
                 workspace.CurrentCamera.FieldOfView = WorldSettings.CustomFOV
             end
+        end
+        if WorldSettings.StretchedResolutionEnabled then
+            local cam = workspace.CurrentCamera
+            local factor = WorldSettings.StretchedResolutionFactor or 1.33
+            cam.CFrame = cam.CFrame * CFrame.fromMatrix(Vector3.zero, Vector3.new(factor, 0, 0), Vector3.new(0, 1, 0), Vector3.new(0, 0, 1))
         end
         if WorldSettings.ThirdPersonEnabled then
             local cam = workspace.CurrentCamera
@@ -4681,6 +4706,12 @@ end
         Default = false,
         Callback = function(state) AutoFastladder = state end
     })
+    local AutoLadderboost = false
+    MovementSection:CreateToggle({
+        Name = "Ladder Boost",
+        Default = false,
+        Callback = function(state) AutoLadderboost = state end
+    })
     local AutoFireman = false
     MovementSection:CreateToggle({
         Name = "Auto Fireman",
@@ -4976,6 +5007,223 @@ end
             if state then env.RemovePSLine() end 
         end
     })
+
+    env.BounceLineSettings = env.BounceLineSettings or {
+        Color = Color3.fromRGB(255, 170, 0),
+        Transparency = 0,
+        Lines = {}
+    }
+    env.BounceLineParts = env.BounceLineParts or {}
+    env.RefreshBounceLines = function()
+        for _, part in env.BounceLineParts do
+            if part then part:Destroy() end
+        end
+        env.BounceLineParts = {}
+        if not env.BounceLineSettings or type(env.BounceLineSettings.Lines) ~= "table" then return end
+        for _, data in env.BounceLineSettings.Lines do
+            if data.P1 and data.P2 and data.Normal then
+                local p = Instance.new("Part", workspace)
+                p.Name = "BounceAssistPart"
+                p.Anchored = true
+                p.CanCollide = false
+                p.CanTouch = false
+                p.CanQuery = false
+                p.CastShadow = false
+                p.Massless = true
+                local length = (data.P2 - data.P1).Magnitude
+                if length < 0.01 then length = 0.01 end
+                local center = data.P1:Lerp(data.P2, 0.5)
+                p.Size = Vector3.new(length, 0.05, 0.001)
+                p.Color = env.BounceLineSettings.Color
+                p.Transparency = env.BounceLineSettings.Transparency
+                p.Material = Enum.Material.Neon
+                local right = (data.P2 - data.P1).Unit
+                if right.Magnitude < 0.01 then right = data.Normal:Cross(Vector3.new(0,1,0)) end
+                local up = data.Normal:Cross(right).Unit
+                p.CFrame = CFrame.fromMatrix(center + data.Normal * 0.01, right, up, -data.Normal)
+                table.insert(env.BounceLineParts, p)
+
+                local collider = Instance.new("Part", workspace)
+                collider.Name = "BounceAssistCollider"
+                collider.Anchored = true
+                collider.CanCollide = true
+                collider.CanTouch = true
+                collider.CanQuery = true
+                collider.CastShadow = false
+                collider.Massless = true
+                collider.Size = Vector3.new(length, 0.15, 2.5)
+                collider.Transparency = 1
+                collider.CFrame = CFrame.fromMatrix(center + data.Normal * 1.25, right, up, -data.Normal)
+                table.insert(env.BounceLineParts, collider)
+            end
+        end
+    end
+    env.RemoveBounceLine = function()
+        local lp = game:GetService("Players").LocalPlayer
+        if not (lp and lp.Character and lp.Character:FindFirstChild("Humanoid") and lp.Character.Humanoid.Health > 0) then return end
+        if env.BounceLineSettings and env.BounceLineSettings.Lines then
+            local cam = workspace.CurrentCamera
+            local rayParams = RaycastParams.new()
+            rayParams.FilterType = Enum.RaycastFilterType.Exclude
+            rayParams.FilterDescendantsInstances = {lp.Character}
+            local hit = workspace:Raycast(cam.CFrame.Position, cam.CFrame.LookVector * 1000, rayParams)
+            if hit then
+                local closestIdx = -1
+                local minSqDist = 16 
+                for i, data in env.BounceLineSettings.Lines do
+                    if data.P1 and data.P2 then
+                        local p1 = data.P1
+                        local p2 = data.P2
+                        local v = p2 - p1
+                        local w = hit.Position - p1
+                        local c1 = w:Dot(v)
+                        local c2 = v:Dot(v)
+                        local distSq
+                        if c1 <= 0 then
+                            distSq = (hit.Position - p1).Magnitude ^ 2
+                        elseif c2 <= c1 then
+                            distSq = (hit.Position - p2).Magnitude ^ 2
+                        else
+                            local b = c1 / c2
+                            local pb = p1 + v * b
+                            distSq = (hit.Position - pb).Magnitude ^ 2
+                        end
+                        if distSq < minSqDist then
+                            minSqDist = distSq
+                            closestIdx = i
+                        end
+                    end
+                end
+                if closestIdx ~= -1 then
+                    table.remove(env.BounceLineSettings.Lines, closestIdx)
+                end
+            end
+        end
+        env.RefreshBounceLines()
+    end
+    env.SetBounceLine = (function()
+        local isDrawingLine = false
+        local drawStartHit = nil
+        local currentDrawPart = nil
+        local drawConnection = nil
+        local function cleanupDraw()
+            isDrawingLine = false
+            if drawConnection then drawConnection:Disconnect(); drawConnection = nil end
+            if currentDrawPart then currentDrawPart:Destroy(); currentDrawPart = nil end
+            drawStartHit = nil
+        end
+        return function(state)
+            local lp = game:GetService("Players").LocalPlayer
+            if not (lp and lp.Character and lp.Character:FindFirstChild("Humanoid") and lp.Character.Humanoid.Health > 0) then return end
+            if state then
+                cleanupDraw()
+                isDrawingLine = true
+                local cam = workspace.CurrentCamera
+                local rayParams = RaycastParams.new()
+                rayParams.FilterType = Enum.RaycastFilterType.Exclude
+                rayParams.FilterDescendantsInstances = {lp.Character}
+                local hit = workspace:Raycast(cam.CFrame.Position, cam.CFrame.LookVector * 1000, rayParams)
+                if hit and hit.Instance then
+                    drawStartHit = { Position = hit.Position, Normal = hit.Normal }
+                    currentDrawPart = Instance.new("Part", workspace)
+                    currentDrawPart.Anchored = true
+                    currentDrawPart.CanCollide = false
+                    currentDrawPart.CanTouch = false
+                    currentDrawPart.CanQuery = false
+                    currentDrawPart.CastShadow = false
+                    currentDrawPart.Massless = true
+                    currentDrawPart.Color = env.BounceLineSettings.Color
+                    currentDrawPart.Transparency = env.BounceLineSettings.Transparency
+                    currentDrawPart.Material = Enum.Material.Neon
+                    drawConnection = game:GetService("RunService").RenderStepped:Connect(function()
+                        if not isDrawingLine then return end
+                        local rayDir = cam.CFrame.LookVector
+                        local rayOrigin = cam.CFrame.Position
+                        local wallRay = workspace:Raycast(rayOrigin, rayDir * 1000, rayParams)
+                        if wallRay and wallRay.Instance then
+                            if wallRay.Normal:Dot(drawStartHit.Normal) < 0.9 then
+                                return
+                            end
+                            local d = drawStartHit.Normal:Dot(rayDir)
+                            if math.abs(d) > 1e-5 then
+                                local t = drawStartHit.Normal:Dot(drawStartHit.Position - rayOrigin) / d
+                                if t > 0 then
+                                    local intersect = rayOrigin + rayDir * t
+                                    local endPos = Vector3.new(intersect.X, drawStartHit.Position.Y, intersect.Z)
+                                    local length = (endPos - drawStartHit.Position).Magnitude
+                                    if length > 100 then
+                                        local dir = (endPos - drawStartHit.Position).Unit
+                                        endPos = drawStartHit.Position + dir * 100
+                                        length = 100
+                                    end
+                                    if length < 0.1 then length = 0.1 end
+                                    local center = drawStartHit.Position:Lerp(endPos, 0.5)
+                                    currentDrawPart.Size = Vector3.new(length, 0.05, 0.001)
+                                    local right = (endPos - drawStartHit.Position).Unit
+                                    if right.Magnitude < 0.01 then right = drawStartHit.Normal:Cross(Vector3.new(0,1,0)) end
+                                    local up = drawStartHit.Normal:Cross(right).Unit
+                                    currentDrawPart.CFrame = CFrame.fromMatrix(center + drawStartHit.Normal * 0.01, right, up, -drawStartHit.Normal)
+                                end
+                            end
+                        end
+                    end)
+                end
+            else
+                if isDrawingLine and drawStartHit and currentDrawPart then
+                    local char = lp.Character
+                    local head = char and char:FindFirstChild("Head")
+                    local neckY = head and (head.Position.Y - 0.6) or (char and char:FindFirstChild("HumanoidRootPart") and char.HumanoidRootPart.Position.Y + 0.9 or drawStartHit.Position.Y)
+                    if drawStartHit.Position.Y < neckY then
+                        Library:Notify("Cannot set Bounce Line below neck level!", 3)
+                        cleanupDraw()
+                    else
+                        local halfSize = currentDrawPart.Size.X / 2
+                        local right = currentDrawPart.CFrame.RightVector
+                        local center = currentDrawPart.Position - drawStartHit.Normal * 0.01
+                        local p1 = center - right * halfSize
+                        local p2 = center + right * halfSize
+                        table.insert(env.BounceLineSettings.Lines, {
+                            P1 = p1,
+                            P2 = p2,
+                            Normal = drawStartHit.Normal
+                        })
+                        cleanupDraw()
+                        env.RefreshBounceLines()
+                    end
+                else
+                    cleanupDraw()
+                end
+            end
+        end
+    end)()
+
+    env.BounceAssist = false
+    AssistantsSection:CreateToggle({
+        Name = "Bounce Assist",
+        Default = false,
+        Colorpickers = {
+            {Name = "Line Color", ColorDefault = Color3.fromRGB(255, 170, 0), AlphaDefault = 1, Callback = function(c, alpha) 
+                env.BounceLineSettings.Color = c
+                env.BounceLineSettings.Transparency = 1 - (alpha or 1)
+                env.RefreshBounceLines() 
+            end}
+        },
+        Callback = function(state) env.BounceAssist = state end
+    })
+    AssistantsSection:CreateToggle({
+        Name = "Set Bounce Line",
+        Default = false,
+        Callback = function(state) 
+            env.SetBounceLine(state)
+        end
+    })
+    AssistantsSection:CreateToggle({
+        Name = "Remove Bounce Line",
+        Default = false,
+        Callback = function(state) 
+            if state then env.RemoveBounceLine() end 
+        end
+    })
     ;(function()
         local psConfigName = "ps_default"
         AssistantsSection:CreateTextbox({
@@ -4989,7 +5237,8 @@ end
             Name = "Save PS Assist Config",
             Callback = function()
                 local fullConfig = {
-                    PSLines = env.PSLineSettings.Lines
+                    PSLines = env.PSLineSettings.Lines,
+                    BounceLines = env.BounceLineSettings.Lines
                 }
                 local encodedConfig = encodeValue(fullConfig)
                 local s, str = pcall(function() return game:GetService("HttpService"):JSONEncode(encodedConfig) end)
@@ -4997,7 +5246,7 @@ end
                     if not isfolder("mayday.tk") then pcall(makefolder, "mayday.tk") end
                     if not isfolder("mayday.tk/PSLines") then pcall(makefolder, "mayday.tk/PSLines") end
                     pcall(writefile, "mayday.tk/PSLines/" .. psConfigName .. ".json", str)
-                    Library:Notify("PS Assist config saved: " .. psConfigName, 3)
+                    Library:Notify("Assist config saved: " .. psConfigName, 3)
                 end
             end
         })
@@ -5014,29 +5263,19 @@ end
                             if decodedConfig.PSLines then
                                 env.PSLineSettings.Lines = decodedConfig.PSLines
                                 env.RefreshPSLines()
-                                Library:Notify("PS Assist config loaded: " .. psConfigName, 3)
-                            else
-                                Library:Notify("Invalid PS Assist config format.", 3)
                             end
+                            if decodedConfig.BounceLines then
+                                env.BounceLineSettings.Lines = decodedConfig.BounceLines
+                                env.RefreshBounceLines()
+                            end
+                            Library:Notify("Assist config loaded: " .. psConfigName, 3)
                         end
                     end
                 else
-                    Library:Notify("PS Assist config '" .. psConfigName .. "' not found!", 3)
+                    Library:Notify("Assist config '" .. psConfigName .. "' not found!", 3)
                 end
             end
         })
-    env.BounceAssist = false
-    AssistantsSection:CreateToggle({
-        Name = "Bounce Assist",
-        Default = false,
-        Callback = function(state) env.BounceAssist = state end
-    })
-    env.TBAssistant = false
-    AssistantsSection:CreateToggle({
-        Name = "TB Assistant",
-        Default = false,
-        Callback = function(state) env.TBAssistant = state end
-    })
     end)()
     local IndicatorSection = MovementTab:CreateSection({
         Name = "Indicators",
@@ -5108,11 +5347,11 @@ end
         Name = "Bind Font", Options = FontsList, Default = "VerdanaBold",
         Callback = function(val) BindInd_Font = val end
     })
-    local BindIndicatorSelection = {eb = true, jb = true, lj = true, ps = true, tb = true, mj = true, ws = true, wc = true}
+    local BindIndicatorSelection = {eb = true, jb = true, lj = true, ps = true, tb = true, mj = true, ws = true, wc = true, lb = true}
     IndicatorSection:CreateMultiDropdown({
         Name = "Shown Binds",
-        Options = {"eb", "jb", "lj", "mj", "ps", "tb", "ws", "wc"},
-        Default = {"eb", "jb", "lj", "mj", "ps", "tb", "ws", "wc"},
+        Options = {"eb", "jb", "lj", "mj", "ps", "tb", "ws", "wc", "lb"},
+        Default = {"eb", "jb", "lj", "mj", "ps", "tb", "ws", "wc", "lb"},
         Callback = function(sel)
             BindIndicatorSelection = {}
             for k, v in sel do
@@ -5140,6 +5379,16 @@ end
     local wasTBugging = false
     local isTBugValid = false
     local lastWallclimbTime = 0
+    local lastEBHitTime = 0
+    local lastJBHitTime = 0
+    local lastLJHitTime = 0
+    local lastMJHitTime = 0
+    local lastPSHitTime = 0
+    local lastTBHitTime = 0
+    local lastWSHitTime = 0
+    local lastWCHitTime = 0
+    local lastFMHitTime = 0
+    local lastLBHitTime = 0
     RunService.RenderStepped:Connect(function(deltaTime)
         local lp = Players.LocalPlayer
         if not lp then return end
@@ -5181,8 +5430,10 @@ end
                             if type(origJump) == "function" and not rawget(obj, "JumpHooked") then
                                 obj.Jumping.Fire = function(self, ...)
                                     if AutoMinijump then
+                                        lastMJHitTime = tick()
                                         if obj.Humanoid then obj.Humanoid.JumpPower = 19.5 * 0.67 end
                                     elseif AutoJumpbug then
+                                        lastJBHitTime = tick()
                                         if obj.Humanoid then obj.Humanoid.JumpPower = 19.5 * 1.140 end
                                     else
                                         if obj.Humanoid then obj.Humanoid.JumpPower = 19.5 end
@@ -5260,6 +5511,7 @@ end
                 if state == Enum.HumanoidStateType.Freefall and velY >= -10 and velY < 15 then
                     wasEdgebugging = false
                     edgebugSlideEndTime = tick() + 0.065
+                    lastEBHitTime = tick()
                     if AutoEdgebugEffect == "Circle" then
                         task.spawn(function()
                             local ts = game:GetService("TweenService")
@@ -5392,6 +5644,58 @@ end
         elseif hum and not hum:GetStateEnabled(Enum.HumanoidStateType.Climbing) then
             hum:SetStateEnabled(Enum.HumanoidStateType.Climbing, true)
         end
+        if AutoFastladder then
+            local isClimbing = (hum:GetState() == Enum.HumanoidStateType.Climbing)
+            if env.MovementController and env.MovementController.IsClimbing then
+                isClimbing = true
+            end
+            if isClimbing and hrp then
+                local uis = game:GetService("UserInputService")
+                local vel = hrp.AssemblyLinearVelocity
+                if uis:IsKeyDown(Enum.KeyCode.W) or uis:IsKeyDown(Enum.KeyCode.Space) then
+                    hrp.AssemblyLinearVelocity = Vector3.new(vel.X, 22, vel.Z)
+                elseif uis:IsKeyDown(Enum.KeyCode.S) then
+                    hrp.AssemblyLinearVelocity = Vector3.new(vel.X, -22, vel.Z)
+                end
+            end
+        end
+        if AutoLadderboost then
+            local isClimbing = (hum:GetState() == Enum.HumanoidStateType.Climbing)
+            if env.MovementController and env.MovementController.IsClimbing then
+                isClimbing = true
+            end
+            if isClimbing and hrp and (tick() - lastLBHitTime > 1.0) then
+                local uis = game:GetService("UserInputService")
+                if uis:IsKeyDown(Enum.KeyCode.W) or uis:IsKeyDown(Enum.KeyCode.Space) then
+                    local rayParams = RaycastParams.new()
+                    rayParams.FilterDescendantsInstances = {char}
+                    rayParams.FilterType = Enum.RaycastFilterType.Exclude
+                    
+                    local lookDir = hrp.CFrame.LookVector
+                    local hitChest = workspace:Raycast(hrp.Position, lookDir * 2.5, rayParams)
+                    local hitAbove = workspace:Raycast(hrp.Position + Vector3.new(0, 2.5, 0), lookDir * 2.5, rayParams)
+                    
+                    if hitChest and not hitAbove then
+                        lastLBHitTime = tick()
+                        local vel = hrp.AssemblyLinearVelocity
+                        local forward = Vector3.new(lookDir.X, 0, lookDir.Z).Unit
+                        local boostVel = Vector3.new(forward.X * 18, 24, forward.Z * 18)
+                        
+                        hrp.AssemblyLinearVelocity = boostVel
+                        local torso = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
+                        if torso then torso.AssemblyLinearVelocity = boostVel end
+                        
+                        hum:ChangeState(Enum.HumanoidStateType.Freefall)
+                        if env.MovementController then
+                            pcall(function()
+                                env.MovementController.IsClimbing = false
+                                env.MovementController.IsJumping = true
+                            end)
+                        end
+                    end
+                end
+            end
+        end
         if AutoFireman then
             local isClimbing = (hum:GetState() == Enum.HumanoidStateType.Climbing)
             if env.MovementController and env.MovementController.IsClimbing then
@@ -5445,7 +5749,7 @@ end
             local rayParams = RaycastParams.new()
             rayParams.FilterDescendantsInstances = {char}
             rayParams.FilterType = Enum.RaycastFilterType.Exclude
-            local center = hrp.Position - Vector3.new(0, 2.8, 0) 
+            local center = hrp.Position - Vector3.new(0, 2.8, 0)
             local lv = Vector3.new(hrp.CFrame.LookVector.X, 0, hrp.CFrame.LookVector.Z).Unit
             local rv = Vector3.new(hrp.CFrame.RightVector.X, 0, hrp.CFrame.RightVector.Z).Unit
             local baseDirs = { lv, -lv, rv, -rv }
@@ -5465,6 +5769,7 @@ end
                 if hit1 and hit2 then
                     local function isValidPSPart(inst)
                         if not inst or not inst.Anchored then return false end
+                        if inst.Name == "BounceAssistCollider" or inst.Name == "BounceAssistPart" then return false end
                         local p = inst.Parent
                         if p and p:FindFirstChildOfClass("Humanoid") then return false end
                         if inst:IsA("MeshPart") and inst.Size.Magnitude < 15 then return false end
@@ -5516,6 +5821,8 @@ end
                     activeZiplineData = matchedLineData
                 end
             end
+
+
             local uis = game:GetService("UserInputService")
             local cam = workspace.CurrentCamera
             local moveVector = Vector3.zero
@@ -5534,6 +5841,7 @@ end
             end
             if pixelSurfFound then
                 lastSurfNormal = currentHitNormal
+                lastPSHitTime = tick()
                 if tick() > pixelSurfEndTime then
                     lockedPixelSurfY = hrp.Position.Y
                     pixelSurfVel = Vector3.new(hrp.AssemblyLinearVelocity.X, 0, hrp.AssemblyLinearVelocity.Z)
@@ -5680,6 +5988,48 @@ end
                 end
             end
         end
+        if AutoTexturebug and hum:GetState() == Enum.HumanoidStateType.Freefall then
+            local rayParams = RaycastParams.new()
+            local ignoreInstances = {char, workspace.CurrentCamera}
+            for _, part in env.BounceLineParts or {} do
+                if part then table.insert(ignoreInstances, part) end
+            end
+            rayParams.FilterDescendantsInstances = ignoreInstances
+            rayParams.FilterType = Enum.RaycastFilterType.Exclude
+            local head = char:FindFirstChild("Head")
+            local torso = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
+            local pos = hrp.Position
+            local headPos = head and head.Position or (pos + Vector3.new(0, 1.5, 0))
+            local dirs = { hrp.CFrame.LookVector, -hrp.CFrame.LookVector, hrp.CFrame.RightVector, -hrp.CFrame.RightVector }
+            local bodyNearWall = false
+            local headNearWall = false
+            for _, dir in dirs do
+                if workspace:Raycast(pos, dir * 1.8, rayParams) then bodyNearWall = true end
+                if head and workspace:Raycast(headPos, dir * 1.8, rayParams) then headNearWall = true end
+            end
+            local topHit = head and workspace:Raycast(headPos, Vector3.new(0, 1.5, 0), rayParams)
+            local headOnly = (headNearWall and not bodyNearWall) or (topHit ~= nil)
+            local nearWall = bodyNearWall or headNearWall or (topHit ~= nil)
+            env.tbSurfing = nearWall
+            if nearWall then
+                lastTBHitTime = tick()
+                local vel = hrp.AssemblyLinearVelocity
+                if headOnly then
+                    hrp.AssemblyLinearVelocity = Vector3.new(vel.X, 0, vel.Z)
+                    if torso then torso.AssemblyLinearVelocity = Vector3.new(vel.X, 0, vel.Z) end
+                else
+                    if tick() % 0.35 < 0.2 then
+                        hrp.AssemblyLinearVelocity = Vector3.new(vel.X, 2, vel.Z)
+                        if torso then torso.AssemblyLinearVelocity = Vector3.new(vel.X, 2, vel.Z) end
+                    else
+                        hrp.AssemblyLinearVelocity = Vector3.new(vel.X, -20, vel.Z)
+                        if torso then torso.AssemblyLinearVelocity = Vector3.new(vel.X, -20, vel.Z) end
+                    end
+                end
+            else
+                env.tbSurfing = false
+            end
+        end
         if AutoLongjump and hum:GetState() == Enum.HumanoidStateType.Running and hrp.AssemblyLinearVelocity.Magnitude > 10 then
             local rayParams = RaycastParams.new()
             rayParams.FilterDescendantsInstances = {char}
@@ -5689,6 +6039,7 @@ end
             local checkPos = hrp.Position + (moveDir * 1.5)
             local hitForward = workspace:Raycast(checkPos, Vector3.new(0, -4, 0), rayParams)
             if hitDown and not hitForward then
+                lastLJHitTime = tick()
                 if env.MovementController then
                     env.MovementController.IsJumping = true
                     env.MovementController.LastJumpTick = tick()
@@ -5856,6 +6207,7 @@ end
                         env.IsWallstuck = true
                         hrp.Anchored = true
                     end
+                    lastWSHitTime = tick()
                 else
                     if env.IsWallstuck then
                         env.IsWallstuck = false
@@ -5958,6 +6310,7 @@ end
                                 end
                             end)
                             lastWallclimbTime = now
+                            lastWCHitTime = now
                         end
                     end
                 end
@@ -5999,6 +6352,50 @@ end
                 local newVel = targetDir * AutoStrafeSpeed
                 hrp.AssemblyLinearVelocity = Vector3.new(newVel.X, currentVel.Y, newVel.Z)
             end
+        end
+
+        if BindIndicatorEnabled then
+            local now = tick()
+            local binds = {}
+            if BindIndicatorSelection.eb and now - lastEBHitTime <= 1.5 then table.insert(binds, "EB") end
+            if BindIndicatorSelection.jb and now - lastJBHitTime <= 1.5 then table.insert(binds, "JB") end
+            if BindIndicatorSelection.lj and now - lastLJHitTime <= 1.5 then table.insert(binds, "LJ") end
+            if BindIndicatorSelection.mj and now - lastMJHitTime <= 1.5 then table.insert(binds, "MJ") end
+            if BindIndicatorSelection.ps and now - lastPSHitTime <= 1.5 then table.insert(binds, "PS") end
+            if BindIndicatorSelection.tb and now - lastTBHitTime <= 1.5 then table.insert(binds, "TB") end
+            if BindIndicatorSelection.ws and now - lastWSHitTime <= 1.5 then table.insert(binds, "WS") end
+            if BindIndicatorSelection.wc and now - lastWCHitTime <= 1.5 then table.insert(binds, "WC") end
+            if BindIndicatorSelection.lb and now - lastLBHitTime <= 1.5 then table.insert(binds, "LB") end
+
+            if #binds > 0 then
+                local textStr = table.concat(binds, " | ")
+                if not env.BindIndLabel then
+                    local sg = Instance.new("ScreenGui")
+                    sg.Name = "BindIndicatorGui"
+                    sg.ResetOnSpawn = false
+                    sg.Parent = game:GetService("CoreGui")
+                    local label = Instance.new("TextLabel")
+                    label.Size = UDim2.new(1, 0, 0, 40)
+                    label.BackgroundTransparency = 1
+                    label.TextSize = BindInd_Size or 28
+                    label.Font = Enum.Font.Verdana
+                    label.TextColor3 = BindInd_Color or Color3.fromRGB(255, 255, 255)
+                    label.TextStrokeColor3 = BindInd_Outline or Color3.fromRGB(0, 0, 0)
+                    label.TextStrokeTransparency = 0
+                    label.Parent = sg
+                    env.BindIndLabel = label
+                end
+                env.BindIndLabel.Text = textStr
+                env.BindIndLabel.Position = UDim2.new(0, 0, 0, BindInd_Y or 630)
+                env.BindIndLabel.TextSize = BindInd_Size or 28
+                env.BindIndLabel.TextColor3 = BindInd_Color or Color3.fromRGB(255, 255, 255)
+                env.BindIndLabel.TextStrokeColor3 = BindInd_Outline or Color3.fromRGB(0, 0, 0)
+                env.BindIndLabel.Visible = true
+            elseif env.BindIndLabel then
+                env.BindIndLabel.Visible = false
+            end
+        elseif env.BindIndLabel then
+            env.BindIndLabel.Visible = false
         end
     end)
     task.spawn(function()
@@ -6778,45 +7175,39 @@ bullet_module._performRaycast = function(self, spreadAmount)
         Callback = function(state)
             local StarterGui = game:GetService("StarterGui")
             local lp = game:GetService("Players").LocalPlayer
+            pcall(function()
+                StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, not state)
+            end)
             if lp and lp:FindFirstChild("PlayerGui") then
                 if state then
-                    local safeGuis = {}
-                    for _, gui in lp.PlayerGui:GetDescendants() do
-                        local gName = string.lower(gui.Name)
-                        if string.find(gName, "crosshair") or string.find(gName, "killfeed") or string.find(gName, "scope") or string.find(gName, "menu") or string.find(gName, "gui") or string.find(gName, "viewport") or string.find(gName, "clarity") then
-                            safeGuis[gui] = true
-                            for _, desc in gui:GetDescendants() do
-                                safeGuis[desc] = true
-                            end
-                            local curr = gui.Parent
-                            while curr and curr ~= lp.PlayerGui do
-                                safeGuis[curr] = true
-                                curr = curr.Parent
+                    table.clear(HiddenGuis)
+                    for _, child in lp.PlayerGui:GetChildren() do
+                        if child:IsA("ScreenGui") and child.Name ~= "LocalMazeGUI" and child.Name ~= "ScreenGui" then
+                            if child.Enabled then
+                                table.insert(HiddenGuis, {Gui = child, Mode = "ScreenGui"})
+                                child.Enabled = false
                             end
                         end
                     end
-                    for _, gui in lp.PlayerGui:GetChildren() do
-                        if gui:IsA("ScreenGui") then
-                            if not safeGuis[gui] and gui.Enabled then
-                                table.insert(HiddenGuis, gui)
-                                gui.Enabled = false
-                            elseif safeGuis[gui] then
-                                for _, desc in gui:GetDescendants() do
-                                    if desc:IsA("GuiObject") and desc.Visible and not safeGuis[desc] then
-                                        table.insert(HiddenGuis, desc)
-                                        desc.Visible = false
-                                    end
+                    local mainGui = lp.PlayerGui:FindFirstChild("GUI") or lp.PlayerGui:FindFirstChild("ClientGUI") or lp.PlayerGui:FindFirstChild("HUD")
+                    if mainGui then
+                        for _, desc in mainGui:GetDescendants() do
+                            if desc:IsA("GuiObject") and desc.Visible then
+                                local nameLower = desc.Name:lower()
+                                if not nameLower:match("crosshair") and not nameLower:match("scope") and not nameLower:match("menu") then
+                                    table.insert(HiddenGuis, {Gui = desc, Mode = "GuiObject"})
+                                    desc.Visible = false
                                 end
                             end
                         end
                     end
                 else
-                    for _, gui in HiddenGuis do
-                        if gui and gui.Parent then
-                            if gui:IsA("ScreenGui") then
-                                gui.Enabled = true
-                            elseif gui:IsA("GuiObject") then
-                                gui.Visible = true
+                    for _, item in HiddenGuis do
+                        if item.Gui and item.Gui.Parent then
+                            if item.Mode == "ScreenGui" then
+                                item.Gui.Enabled = true
+                            elseif item.Mode == "GuiObject" then
+                                item.Gui.Visible = true
                             end
                         end
                     end
@@ -7051,15 +7442,27 @@ bullet_module._performRaycast = function(self, spreadAmount)
             else
                 Ind_Binds.FontFace = Font.new("rbxasset://fonts/families/" .. BindInd_Font .. ".json", Enum.FontWeight.Regular, Enum.FontStyle.Normal)
             end
+            Ind_Binds.RichText = true
             local activeBinds = {}
-            if AutoEdgebug and BindIndicatorSelection["eb"] then table.insert(activeBinds, "eb") end
-            if AutoJumpbug and BindIndicatorSelection["jb"] then table.insert(activeBinds, "jb") end
-            if AutoLongjump and BindIndicatorSelection["lj"] then table.insert(activeBinds, "lj") end
-            if AutoMinijump and BindIndicatorSelection["mj"] then table.insert(activeBinds, "mj") end
-            if AutoPixelsurf and BindIndicatorSelection["ps"] then table.insert(activeBinds, "ps") end
-            if AutoTexturebug and BindIndicatorSelection["tb"] then table.insert(activeBinds, "tb") end
-            if AutoWallstuck and BindIndicatorSelection["ws"] then table.insert(activeBinds, "ws") end
-            if AutoWallclimb and BindIndicatorSelection["wc"] then table.insert(activeBinds, "wc") end
+            local now = tick()
+            local defR = math.floor(BindInd_Color.R * 255)
+            local defG = math.floor(BindInd_Color.G * 255)
+            local defB = math.floor(BindInd_Color.B * 255)
+            local function formatBind(code, lastHitTime)
+                if (now - lastHitTime) <= 0.6 then
+                    return '<font color="rgb(0,255,100)">' .. code .. '</font>'
+                else
+                    return string.format('<font color="rgb(%d,%d,%d)">%s</font>', defR, defG, defB, code)
+                end
+            end
+            if AutoEdgebug and BindIndicatorSelection["eb"] then table.insert(activeBinds, formatBind("eb", lastEBHitTime)) end
+            if AutoJumpbug and BindIndicatorSelection["jb"] then table.insert(activeBinds, formatBind("jb", lastJBHitTime)) end
+            if AutoLongjump and BindIndicatorSelection["lj"] then table.insert(activeBinds, formatBind("lj", lastLJHitTime)) end
+            if AutoMinijump and BindIndicatorSelection["mj"] then table.insert(activeBinds, formatBind("mj", lastMJHitTime)) end
+            if AutoPixelsurf and BindIndicatorSelection["ps"] then table.insert(activeBinds, formatBind("ps", lastPSHitTime)) end
+            if AutoTexturebug and BindIndicatorSelection["tb"] then table.insert(activeBinds, formatBind("tb", lastTBHitTime)) end
+            if AutoWallstuck and BindIndicatorSelection["ws"] then table.insert(activeBinds, formatBind("ws", lastWSHitTime)) end
+            if AutoWallclimb and BindIndicatorSelection["wc"] then table.insert(activeBinds, formatBind("wc", lastWCHitTime)) end
             Ind_Binds.Text = table.concat(activeBinds, " ")
         else
             Ind_Binds.Visible = false
